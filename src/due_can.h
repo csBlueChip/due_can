@@ -37,8 +37,8 @@
 	#define ARDUINO152
 #endif
 
-#define CAN		Can0
-#define CAN2	Can1
+//#define CAN		Can0
+//#define CAN2	Can1
 
 #define CAN0_EN  50 //these enable pins match most all recent EVTV boards (EVTVDue, CAN Due 2.0)
 #define CAN1_EN  48 //they're only defaults, you can set whichever pin you need when calling begin()
@@ -258,7 +258,8 @@ private:
 	
 	uint32_t write_id; //storage for an id. Will be used by the write function to set which ID to send to.
 	bool bigEndian;
-    
+
+public:    
     uint32_t numBusErrors;
     uint32_t numRxFrames;
 };
