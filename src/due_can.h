@@ -227,7 +227,7 @@ protected:
   bool addToRingBuffer (ringbuffer_t &ring, const CAN_FRAME &msg);
   bool removeFromRingBuffer (ringbuffer_t &ring, CAN_FRAME &msg);
   inline bool isRingBufferEmpty (ringbuffer_t &ring) { return (ring.head == ring.tail); }
-  uint16_t ringBufferCount (ringbuffer_t &ring);
+//  uint16_t ringBufferCount (ringbuffer_t &ring);
 
   void irqLock() { NVIC_DisableIRQ(nIRQ); }
   void irqRelease() { NVIC_EnableIRQ(nIRQ); }

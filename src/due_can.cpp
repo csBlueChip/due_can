@@ -353,15 +353,6 @@ bool  CANRaw::removeFromRingBuffer (ringbuffer_t& ring,  CAN_FRAME& msg)
 	return true;
 }
 
-//+=============================================================================
-uint16_t  CANRaw::ringBufferCount (ringbuffer_t& ring)
-{
-// !!! should this be IRQ locked?
-	if (ring.tail == ring.head)  return 0 ;
-	if (ring.tail  < ring.head)  return ring.head - ring.tail ;
-	else                         return ring.size - ring.tail + ring.head ;
-}
-
 //+=====================================================================================================================
 void  CANRaw::setListenOnlyMode (bool state)
 {
@@ -962,11 +953,12 @@ uint32_t  CANRaw::mailbox_tx_frame (uint8_t uc_index)
 //+=====================================================================================================================
 uint16_t  CANRaw::available ()
 {
-	uint16_t val;
+	uint16_t val = 0;  // assume head == tail
 
 	irqLock();
 	{
-		val = ringBufferCount(rxRing);
+		if      (rxRing.tail < rxRing.head)  val = rxRing.head - rxRing.tail ;
+		else if (rxRing.tail > rxRing.head)  val = rxRing.size - rxRing.tail + rxRing.head ;
 	}
 	irqRelease();
 
@@ -980,7 +972,7 @@ bool  CANRaw::rx_avail ()
 
 	irqLock();
 	{
-		result = !isRingBufferEmpty(rxRing);
+		result = !isRingBufferEmpty(rxRing);  // inline
 	}
 	irqRelease();
 
