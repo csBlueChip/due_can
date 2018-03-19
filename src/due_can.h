@@ -22,6 +22,11 @@
 #include <Arduino.h>
 #include <can_common.h>
 
+typedef uint32_t nuint32_t;
+typedef uint8_t  nuint8_t;
+typedef bool     nbool;
+
+
 #define DUE_CAN_MAILBOX_TX_BUFFER_SUPPORT  // helper definition for handling different FlexCAN revisions
 #define DUE_CAN_DYNAMIC_BUFFER_SUPPORT  // helper definition for handling different FlexCAN revisions
 
@@ -62,6 +67,7 @@
 #define CAN_MAILBOX_NOT_READY         0x01  //! Receiver is empty or transmitter is busy.
 #define CAN_MAILBOX_RX_OVER           0x02  //! Message overwriting happens or there're messages lost in different receive modes.
 #define CAN_MAILBOX_RX_NEED_RD_AGAIN  0x04  //! Application needs to re-read the data register in Receive with Overwrite mode.
+#define CAN_MAILBOX_BAD_MAILBOX       0x80  //! Mailbox does not exist
 
 #define SIZE_RX_BUFFER	32 //RX incoming ring buffer is this big
 #define SIZE_TX_BUFFER	16 //TX ring buffer is this big
@@ -131,7 +137,7 @@ public:
     // You can define mailbox specific tx buffer size. This can be defined only once per mailbox.
     // As default prioritized messages will not be buffered. If you define buffer size for mail box, the messages will be
     // buffered to own buffer, if necessary.
-    void setMailBoxTxBufferSize(uint8_t mbox, uint16_t size);
+    nbool setMailBoxTxBufferSize(uint8_t mbox, uint16_t size);
 
     int setNumTXBoxes(int txboxes);
     inline uint8_t getFirstTxBox() { return getNumMailBoxes()-numTXBoxes; }
@@ -140,8 +146,8 @@ public:
     inline uint8_t getNumRxBoxes() { return getNumMailBoxes()-numTXBoxes; }
   
 	int findFreeRXMailbox();
-	uint8_t mailbox_get_mode(uint8_t uc_index);
-	uint32_t mailbox_get_id(uint8_t uc_index);
+	nuint8_t mailbox_get_mode(uint8_t uc_index);
+	nuint32_t mailbox_get_id(uint8_t uc_index);
 	uint32_t getMailboxIer(int8_t mailbox);
 
 	bool sendFrame(CAN_FRAME& txFrame, uint8_t mbox);
@@ -194,22 +200,22 @@ public:
 	void reset_internal_timer();
 	void global_send_transfer_cmd(uint8_t uc_mask);
 	void global_send_abort_cmd(uint8_t uc_mask);
-	void mailbox_set_timemark(uint8_t uc_index, uint16_t us_cnt);
-	uint32_t mailbox_get_status(uint8_t uc_index);
-	void mailbox_send_transfer_cmd(uint8_t uc_index);
-	void mailbox_send_abort_cmd(uint8_t uc_index);
-	void mailbox_init(uint8_t uc_index);
-	uint32_t mailbox_read(uint8_t uc_index, volatile CAN_FRAME *rxframe);
-	uint32_t mailbox_tx_frame(uint8_t uc_index);
-	void mailbox_set_id(uint8_t uc_index, uint32_t id, bool extended);
-	void mailbox_set_priority(uint8_t uc_index, uint8_t pri);
-	void mailbox_set_accept_mask(uint8_t uc_index, uint32_t mask, bool ext);
-	void mailbox_set_mode(uint8_t uc_index, uint8_t mode);
-	void mailbox_set_databyte(uint8_t uc_index, uint8_t bytepos, uint8_t val);
-	void mailbox_set_datalen(uint8_t uc_index, uint8_t dlen);
-	void mailbox_set_datal(uint8_t uc_index, uint32_t val);
-	void mailbox_set_datah(uint8_t uc_index, uint32_t val);
-	void  mailbox_set_rtr (uint8_t mbox,  uint8_t rtr) ;
+	nbool mailbox_set_timemark(uint8_t uc_index, uint16_t us_cnt);
+	nuint32_t mailbox_get_status(uint8_t uc_index);
+	nbool mailbox_send_transfer_cmd(uint8_t uc_index);
+	nbool mailbox_send_abort_cmd(uint8_t uc_index);
+	nbool mailbox_init(uint8_t uc_index);
+	nuint32_t mailbox_read(uint8_t uc_index, volatile CAN_FRAME *rxframe);
+	nuint32_t mailbox_tx_frame(uint8_t uc_index);
+	nbool mailbox_set_id(uint8_t uc_index, uint32_t id, bool extended);
+	nbool mailbox_set_priority(uint8_t uc_index, uint8_t pri);
+	nbool mailbox_set_accept_mask(uint8_t uc_index, uint32_t mask, bool ext);
+	nbool mailbox_set_mode(uint8_t uc_index, uint8_t mode);
+	nbool mailbox_set_databyte(uint8_t uc_index, uint8_t bytepos, uint8_t val);
+	nbool mailbox_set_datalen(uint8_t uc_index, uint8_t dlen);
+	nbool mailbox_set_datal(uint8_t uc_index, uint32_t val);
+	nbool mailbox_set_datah(uint8_t uc_index, uint32_t val);
+	nbool  mailbox_set_rtr (uint8_t mbox,  uint8_t rtr) ;
 
 protected:
   struct ringbuffer_t {
@@ -232,7 +238,7 @@ protected:
   void irqLock() { NVIC_DisableIRQ(nIRQ); }
   void irqRelease() { NVIC_EnableIRQ(nIRQ); }
 
-  void initializeBuffers();
+  nbool initializeBuffers();
   bool isInitialized() { return tx_frame_buff!=0; }
     
   bool usesGlobalTxRing(uint8_t mbox) { return (mbox<getNumMailBoxes()?txRings[mbox]==0:true); }

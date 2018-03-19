@@ -170,22 +170,26 @@ uint32_t  CANRaw::beginAutoSpeed ()
 }
 
 //+=====================================================================================================================
-void  CANRaw::setMailBoxTxBufferSize (uint8_t mbox,  uint16_t size)
+// !!! This function does NOT allow you to CHANGE the buffer size ...only SET it
+// !!! it should also be returning a bool
+nbool  CANRaw::setMailBoxTxBufferSize (uint8_t mbox,  uint16_t size)
 {
-	if ((mbox >= getNumMailBoxes()) || txRings[mbox])  return ;
+	if ((mbox >= getNumMailBoxes()) || txRings[mbox])  return false ;
 
 	volatile  CAN_FRAME*  buf = new CAN_FRAME[size];
 
 	txRings[mbox] = new ringbuffer_t;
 	initRingBuffer(*(txRings[mbox]), buf, size);
+
+	return true;
 }
 
 //+=====================================================================================================================
 // Initialize dynamically sized buffers.
 //
-void  CANRaw::initializeBuffers ()
+nbool  CANRaw::initializeBuffers ()
 {
-	if (isInitialized())  return ;
+	if (isInitialized())  return true ;
 
 	DEBUGF("Initialize buffers");
 	// set up the transmit and receive ring buffers
@@ -194,6 +198,8 @@ void  CANRaw::initializeBuffers ()
 
 	initRingBuffer(txRing, tx_frame_buff, sizeTxBuffer);
 	initRingBuffer(rxRing, rx_frame_buff, sizeRxBuffer);
+	
+	return true;
 }
 
 //+=====================================================================================================================
@@ -320,7 +326,7 @@ void  CANRaw::initRingBuffer (ringbuffer_t& ring,  volatile CAN_FRAME* buffer,  
 //+=============================================================================
 bool  CANRaw::addToRingBuffer (ringbuffer_t& ring,  const CAN_FRAME& msg)
 {
-	uint16_t nextEntry;
+	uint16_t  nextEntry;
 
 // !!! should this be IRQ locked?
 	nextEntry = (ring.head + 1) % ring.size;
@@ -514,26 +520,24 @@ void  CANRaw::global_send_abort_cmd (uint8_t uc_mask)
  * \param us_cnt   The timemark to be set.
  * \note The timemark is active in Time Triggered mode only.
  */
-void  CANRaw::mailbox_set_timemark (uint8_t uc_index,  uint16_t us_cnt)
+nbool  CANRaw::mailbox_set_timemark (uint8_t uc_index,  uint16_t us_cnt)
 {
-	// !!! OK, we really need to be returning an error and not just grabbing the last mailbox
-	// !!! This (worryingly) might explain why all the code I keep looking at seems to avoid the last mailbox
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MMR = (m_pCan->CAN_MB[uc_index].CAN_MMR & ((uint32_t)~TIMEMARK_MASK)) | us_cnt;
+
+	return true;
 }
 
 //+=====================================================================================================================
-/**
- * \brief Get status of the mailbox.
- * \param uc_index Indicate which mailbox is to be read.
- * \retval The mailbox status.
- */
-uint32_t  CANRaw::mailbox_get_status (uint8_t uc_index)
+// For details on CAN_MSR, see: C:\Users\username\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.11\system\CMSIS\Device\ATMEL\sam3xa\include\component\component_can.h
+// I have opted to return (1<<31) for a bad mailbox, because values >= (1<<24) are invalid 
+// ...this also implies CAN_MSR_MRDY (mailbox ready) will be 0
+//
+nuint32_t  CANRaw::mailbox_get_status (uint8_t uc_index)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
-
-	return m_pCan->CAN_MB[uc_index].CAN_MSR;
+	if (uc_index >= CANMB_NUMBER)  return 1<<31 ;
+    else                           return m_pCan->CAN_MB[uc_index].CAN_MSR ;
 }
 
 //+=====================================================================================================================
@@ -541,11 +545,13 @@ uint32_t  CANRaw::mailbox_get_status (uint8_t uc_index)
  * \brief Send single mailbox transfer request.
  * \param uc_index Indicate which mailbox is to be configured.
  */
-void  CANRaw::mailbox_send_transfer_cmd (uint8_t uc_index)
+nbool  CANRaw::mailbox_send_transfer_cmd (uint8_t uc_index)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MCR |= CAN_MCR_MTCR;
+
+	return true;
 }
 
 //+=====================================================================================================================
@@ -553,11 +559,13 @@ void  CANRaw::mailbox_send_transfer_cmd (uint8_t uc_index)
  * \brief Send single mailbox abort request.
  * \param uc_index Indicate which mailbox is to be configured.
  */
-void  CANRaw::mailbox_send_abort_cmd (uint8_t uc_index)
+nbool  CANRaw::mailbox_send_abort_cmd (uint8_t uc_index)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MCR |= CAN_MCR_MACR;
+
+	return true;
 }
 
 //+=====================================================================================================================
@@ -565,9 +573,9 @@ void  CANRaw::mailbox_send_abort_cmd (uint8_t uc_index)
  * \brief Initialize the mailbox to a default, known state.
  * \param p_mailbox Pointer to a CAN mailbox instance.
  */
-void  CANRaw::mailbox_init (uint8_t uc_index)
+nbool  CANRaw::mailbox_init (uint8_t uc_index)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MMR = 0;
 	m_pCan->CAN_MB[uc_index].CAN_MAM = 0;
@@ -575,6 +583,8 @@ void  CANRaw::mailbox_init (uint8_t uc_index)
 	m_pCan->CAN_MB[uc_index].CAN_MDL = 0;
 	m_pCan->CAN_MB[uc_index].CAN_MDH = 0;
 	m_pCan->CAN_MB[uc_index].CAN_MCR = 0;
+
+	return true;
 }
 
 //+=====================================================================================================================
@@ -649,7 +659,7 @@ void  CANRaw::writeTxRegisters (const CAN_FRAME& txFrame,  uint8_t mb)
  */
 bool  CANRaw::sendFrame (CAN_FRAME& txFrame)
 {
-	bool result = false;
+	bool  result = false;
 
 	irqLock();
 	{
@@ -713,20 +723,14 @@ bool  CANRaw::sendFrame (CAN_FRAME& txFrame,  uint8_t mbox)
 }
 
 //+=====================================================================================================================
-/**
- * \brief Read a frame from out of the mailbox and into a software buffer
- * \param uc_index which mailbox to read
- * \param rxframe Pointer to a receive frame structure which we'll fill out
- * \retval Different CAN mailbox transfer status.
- */
-uint32_t  CANRaw::mailbox_read (uint8_t uc_index,  volatile CAN_FRAME* rxframe)
+nuint32_t  CANRaw::mailbox_read (uint8_t uc_index,  volatile CAN_FRAME* rxframe)
 {
 	uint32_t  ul_status;
 	uint32_t  ul_retval;
 	uint32_t  ul_id;
 	uint32_t  ul_datal, ul_datah;
 
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return CAN_MAILBOX_BAD_MAILBOX ;  // My new value, see due_can.h
 
 	ul_retval = 0;
 	ul_status = m_pCan->CAN_MB[uc_index].CAN_MSR;
@@ -775,28 +779,28 @@ uint32_t  CANRaw::mailbox_read (uint8_t uc_index,  volatile CAN_FRAME* rxframe)
  * \param extended Boolean indicating if this ID should be designated as extended
  *
  */
-void  CANRaw::mailbox_set_id (uint8_t uc_index,  uint32_t id,  bool extended)
+nbool  CANRaw::mailbox_set_id (uint8_t uc_index,  uint32_t id,  bool extended)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	if (extended)  m_pCan->CAN_MB[uc_index].CAN_MID = id | CAN_MID_MIDE ;
 	else           m_pCan->CAN_MB[uc_index].CAN_MID = CAN_MID_MIDvA(id);
+
+	return true;
 }
 
 //+=====================================================================================================================
-/**
- * \brief Get ID currently associated with a given mailbox
- * \param uc_index The mailbox to get the ID from (0-7)
- * \retval The ID associated with the mailbox
- */
-uint32_t  CANRaw::mailbox_get_id (uint8_t uc_index)
+// I have opted to return 0xFFFFFFFFul for a bad mailbox, because values >= (1<<29) are ALWAYS invalid 
+// ...this also implies (AID & AID_MASK) will be all-recessive (ie. lowest priority)
+//
+nuint32_t  CANRaw::mailbox_get_id (uint8_t uc_index)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return 0xFFFFFFFFul ;
 
 	if (m_pCan->CAN_MB[uc_index].CAN_MID & CAN_MID_MIDE)
 		return m_pCan->CAN_MB[uc_index].CAN_MID;
 	else
-		return (m_pCan->CAN_MB[uc_index].CAN_MID >> CAN_MID_MIDvA_Pos) & 0x7ffu;
+		return (m_pCan->CAN_MB[uc_index].CAN_MID >> CAN_MID_MIDvA_Pos) & 0x7FFul;
 }
 
 //+=====================================================================================================================
@@ -805,12 +809,14 @@ uint32_t  CANRaw::mailbox_get_id (uint8_t uc_index)
  * \param uc_index The mailbox to use
  * \param pri The priority to set (0-15 in descending priority)
  */
-void  CANRaw::mailbox_set_priority (uint8_t uc_index,  uint8_t pri)
+nbool  CANRaw::mailbox_set_priority (uint8_t uc_index,  uint8_t pri)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MMR = (m_pCan->CAN_MB[uc_index].CAN_MMR & ~CAN_MMR_PRIOR_Msk)
 	                                   | (pri << CAN_MMR_PRIOR_Pos);
+
+	return true;
 }
 
 //+=====================================================================================================================
@@ -820,18 +826,20 @@ void  CANRaw::mailbox_set_priority (uint8_t uc_index,  uint8_t pri)
  * \param mask The mask to set
  * \param ext Whether this should be an extended mask or not
  */
-void  CANRaw::mailbox_set_accept_mask (uint8_t uc_index,  uint32_t mask,  bool ext)
+nbool  CANRaw::mailbox_set_accept_mask (uint8_t uc_index,  uint32_t mask,  bool ext)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	if (ext) {
-		m_pCan->CAN_MB[uc_index].CAN_MAM  = mask | CAN_MAM_MIDE;
+		m_pCan->CAN_MB[uc_index].CAN_MAM  = CAN_MAM_MIDE | mask;
 		m_pCan->CAN_MB[uc_index].CAN_MID |= CAN_MAM_MIDE;
 
 	} else {
 		m_pCan->CAN_MB[uc_index].CAN_MAM  = CAN_MAM_MIDvA(mask);
 		m_pCan->CAN_MB[uc_index].CAN_MID &= ~CAN_MAM_MIDE;
 	}
+
+	return true;
 }
 
 //+=====================================================================================================================
@@ -841,31 +849,29 @@ void  CANRaw::mailbox_set_accept_mask (uint8_t uc_index,  uint32_t mask,  bool e
  * \param mode The mode to set mailbox to
  * \Note Modes: 0 = Disabled, 1 = RX, 2 = RX with overwrite, 3 = TX, 4 = consumer 5 = producer
  */
-void  CANRaw::mailbox_set_mode (uint8_t uc_index,  uint8_t mode)
+nbool  CANRaw::mailbox_set_mode (uint8_t uc_index,  uint8_t mode)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
-
-	if (mode > 5)  mode = 0 ;  // set disabled on invalid mode  // !!!
+	if ((uc_index >= CANMB_NUMBER) || (mode > 5))  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MMR = (m_pCan->CAN_MB[uc_index].CAN_MMR & ~CAN_MMR_MOT_Msk)
 	                                   | (mode << CAN_MMR_MOT_Pos);
+
+	return true;
 }
 
 //+=====================================================================================================================
-/**
- * \brief Get current mode of given mailbox
- * \param uc_index Which mailbox to retrieve mode from (0-7)
- * \retval Mode of mailbox
- */
-uint8_t  CANRaw::mailbox_get_mode (uint8_t uc_index)
+// For details on CAN_MMR, see: C:\Users\username\AppData\Local\Arduino15\packages\arduino\hardware\sam\1.6.11\system\CMSIS\Device\ATMEL\sam3xa\include\component\component_can.h
+// I have opted to return CAN_MMR_MOT_MB_DISABLED (==0) for a bad mailbox, because it seems a sensible choice
+// We could validly return 7, because it's unused ...or >=8, because it's invalid
+//
+nuint8_t  CANRaw::mailbox_get_mode (uint8_t uc_index)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
-
-	return (uint8_t)((m_pCan->CAN_MB[uc_index].CAN_MMR >> CAN_MMR_MOT_Pos) & 0x07);
+	if (uc_index >= CANMB_NUMBER)  return (CAN_MMR_MOT_MB_DISABLED & CAN_MMR_MOT_Msk) >> CAN_MMR_MOT_Pos ; // == 0
+	else                  return (m_pCan->CAN_MB[uc_index].CAN_MMR & CAN_MMR_MOT_Msk) >> CAN_MMR_MOT_Pos ;
 }
 
 //+=====================================================================================================================
-void  CANRaw::mailbox_set_databyte (uint8_t uc_index,  uint8_t bytepos,  uint8_t val)
+nbool  CANRaw::mailbox_set_databyte (uint8_t uc_index,  uint8_t bytepos,  uint8_t val)
 {
 /*
 	uint8_t   shift;    // how many bits to shift
@@ -890,56 +896,64 @@ void  CANRaw::mailbox_set_databyte (uint8_t uc_index,  uint8_t bytepos,  uint8_t
 	int     shift;
 	RwReg*  dreg;
 
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
-	if (bytepos > 7)  bytepos = 7 ;  // !!!
+	if ((uc_index >= CANMB_NUMBER) || (bytepos > 7))  return false ;
 
 	shift = (bytepos & 0x03) * 8;
 	dreg  = (bytepos & 0x04) ? &(m_pCan->CAN_MB[uc_index].CAN_MDH)
 	                         : &(m_pCan->CAN_MB[uc_index].CAN_MDL) ;
 	*dreg = (*dreg & ~(0xFF << shift)) | (val << shift);
+
+	return true;
 }
 
 //+=============================================================================
-void  CANRaw::mailbox_set_datal (uint8_t uc_index,  uint32_t val)
+nbool  CANRaw::mailbox_set_datal (uint8_t uc_index,  uint32_t val)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MDL = val;
+
+	return true;
 }
 
 //+=============================================================================
-void  CANRaw::mailbox_set_datah (uint8_t uc_index,  uint32_t val)
+nbool  CANRaw::mailbox_set_datah (uint8_t uc_index,  uint32_t val)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MDH = val;
+
+	return true;
 }
 
 //+=============================================================================
-void  CANRaw::mailbox_set_datalen (uint8_t uc_index,  uint8_t dlen)
+nbool  CANRaw::mailbox_set_datalen (uint8_t uc_index,  uint8_t dlen)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
-	if (dlen > 8)  dlen = 8 ;  // !!!
+	if ((uc_index >= CANMB_NUMBER) || (dlen > 8))  return false ;
 
 	m_pCan->CAN_MB[uc_index].CAN_MCR =
 		(m_pCan->CAN_MB[uc_index].CAN_MCR & ~CAN_MCR_MDLC_Msk) | CAN_MCR_MDLC(dlen);
+
+	return true;
 }
 
 //+=====================================================================================================================
-void  CANRaw::mailbox_set_rtr (uint8_t uc_index,  uint8_t rtr)
+nbool  CANRaw::mailbox_set_rtr (uint8_t uc_index,  uint8_t rtr)
 {
-	if (uc_index >= CANMB_NUMBER)  uc_index = CANMB_NUMBER - 1 ;  // !!!
+	if (uc_index >= CANMB_NUMBER)  return false ;
 
 	if (rtr)  m_pCan->CAN_MB[uc_index].CAN_MSR |=  CAN_MSR_MRTR;
 	else      m_pCan->CAN_MB[uc_index].CAN_MSR &= ~CAN_MSR_MRTR;
+
+	return true;
 }
 
 //+=====================================================================================================================
-// Returns: CAN_MAILBOX_NOT_READY  or  CAN_MAILBOX_TRANSFER_OK
+// Returns: CAN_MAILBOX_NOT_READY  or  CAN_MAILBOX_TRANSFER_OK  or  CAN_MAILBOX_BAD_MAILBOX
 //
-uint32_t  CANRaw::mailbox_tx_frame (uint8_t uc_index)
+nuint32_t  CANRaw::mailbox_tx_frame (uint8_t uc_index)
 {
-	// !!! LOL, no bounds chekcing on the input pram
+	if (uc_index >= CANMB_NUMBER)  return CAN_MAILBOX_BAD_MAILBOX ;  // My new value, see due_can.h
 
 	/* Read the mailbox status firstly to check whether the mailbox is ready or not. */
 	if (!(m_pCan->CAN_MB[uc_index].CAN_MSR & CAN_MSR_MRDY))  return CAN_MAILBOX_NOT_READY ;
@@ -953,7 +967,7 @@ uint32_t  CANRaw::mailbox_tx_frame (uint8_t uc_index)
 //+=====================================================================================================================
 uint16_t  CANRaw::available ()
 {
-	uint16_t val = 0;  // assume head == tail
+	uint16_t  val = 0;  // assume head == tail
 
 	irqLock();
 	{
@@ -968,7 +982,7 @@ uint16_t  CANRaw::available ()
 //+=====================================================================================================================
 bool  CANRaw::rx_avail ()
 {
-	bool result;
+	bool  result;
 
 	irqLock();
 	{
@@ -984,7 +998,7 @@ bool  CANRaw::rx_avail ()
 // !!! surely better off returing a bool?
 uint32_t  CANRaw::get_rx_buff (CAN_FRAME& msg)
 {
-	uint32_t result;
+	uint32_t  result;
 
 	irqLock();
 	{
@@ -1104,7 +1118,7 @@ void  CANRaw::mailbox_int_handler (uint8_t mb,  uint32_t /*ul_status*/)
 	CANListener*   thisListener;
 	ringbuffer_t*  pRing;
 
-	if (mb >= getNumMailBoxes())  mb = getNumMailBoxes() - 1 ;  // !!!
+	if (mb >= getNumMailBoxes())  return ;  // We no longer fallback to mailbox[7]
 
 	if (m_pCan->CAN_MB[mb].CAN_MSR & CAN_MSR_MRDY) { //mailbox signals it is ready
 		switch(((m_pCan->CAN_MB[mb].CAN_MMR >> 24) & 7)) { //what sort of mailbox is it?
